@@ -1,0 +1,6 @@
+/target
+.DS_Store
+.agent/
+.claude/worktrees/
+demo.tape
+.idea/

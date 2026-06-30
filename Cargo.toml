@@ -1,0 +1,43 @@
+[package]
+name = "llmtop"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "htop for local LLMs — universal TUI dashboard for monitoring Ollama, llama.cpp, vLLM, and any OpenAI-compatible inference server"
+license = "GPL-3.0"
+repository = "https://github.com/weby-homelab/LLMtop"
+homepage = "https://github.com/weby-homelab/LLMtop"
+keywords = ["tui", "monitor", "llm", "ollama", "localllm"]
+categories = ["command-line-utilities"]
+readme = "README.md"
+authors = ["weby-homelab <rekvizitor.ua@gmail.com>"]
+[[bin]]
+name = "llmtop"
+path = "src/main.rs"
+
+[lib]
+name = "llmtop"
+path = "src/lib.rs"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+chrono = { version = "0.4", features = ["serde"] }
+tempfile = "3"
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+proc_pidinfo = "0.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+sysinfo = "0.32"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
