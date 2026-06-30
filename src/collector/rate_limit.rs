@@ -2,10 +2,10 @@ use crate::model::RateLimitInfo;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-/// File written by the StatusLine hook: ~/.claude/abtop-rate-limits.json
-const CLAUDE_RATE_FILE: &str = "abtop-rate-limits.json";
+/// File written by the StatusLine hook: ~/.claude/llmtop-rate-limits.json
+const CLAUDE_RATE_FILE: &str = "llmtop-rate-limits.json";
 
-/// Cached Codex rate limit: ~/.cache/abtop/codex-rate-limits.json
+/// Cached Codex rate limit: ~/.cache/llmtop/codex-rate-limits.json
 const CODEX_CACHE_FILE: &str = "codex-rate-limits.json";
 
 #[derive(Debug, Deserialize)]
@@ -101,7 +101,7 @@ fn window_json(pct: Option<f64>, resets_at: Option<u64>) -> String {
 }
 
 fn codex_cache_path() -> Option<PathBuf> {
-    dirs::cache_dir().map(|d| d.join("abtop").join(CODEX_CACHE_FILE))
+    dirs::cache_dir().map(|d| d.join("llmtop").join(CODEX_CACHE_FILE))
 }
 
 fn read_rate_file(path: &Path, default_source: &str) -> Option<RateLimitInfo> {

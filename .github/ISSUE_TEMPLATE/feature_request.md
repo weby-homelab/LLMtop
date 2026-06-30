@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for abtop
+about: Suggest a new feature for LLMtop
 labels: enhancement
 ---
 

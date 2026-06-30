@@ -9,7 +9,7 @@ Set Theme "Catppuccin Mocha"
 Set Framerate 30
 
 Hide
-Type "../target/debug/abtop --demo"
+Type "../target/debug/llmtop --demo"
 Enter
 Sleep 1s
 Show

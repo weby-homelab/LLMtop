@@ -76,7 +76,7 @@ pub fn get_process_info() -> HashMap<u32, ProcInfo> {
 
         // CPU%: lifetime average (total CPU time / wall time).
         // This differs from ps's instantaneous %CPU but is sufficient for
-        // abtop's Working/Waiting threshold (cpu_pct > 1.0). A long-idle
+        // llmtop's Working/Waiting threshold (cpu_pct > 1.0). A long-idle
         // process that was busy at startup will show a declining average,
         // eventually dropping below 1.0 as elapsed time grows.
         let uptime_ticks = (uptime_secs * clk_tck) as u64;
@@ -214,7 +214,7 @@ pub fn get_children_map(procs: &HashMap<u32, ProcInfo>) -> HashMap<u32, Vec<u32>
 }
 
 /// Walk the ppid chain from `pid` and return true if `ancestor` is reached.
-/// Used to identify processes spawned by abtop itself (e.g. `claude --print`
+/// Used to identify processes spawned by LLMtop itself (e.g. `claude --print`
 /// summary children) so they can be filtered without dropping unrelated
 /// non-interactive sessions started by the user.
 pub fn is_descendant_of(pid: u32, ancestor: u32, process_info: &HashMap<u32, ProcInfo>) -> bool {

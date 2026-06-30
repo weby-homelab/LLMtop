@@ -1,3 +1,4 @@
-# abtop
+# LLMtop
 
-Claude-specific instructions are kept in [AGENTS.md](./AGENTS.md).
+Local LLM instructions and specifications are kept in [AGENTS.md](./AGENTS.md).
+

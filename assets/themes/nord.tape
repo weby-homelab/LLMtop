@@ -8,7 +8,7 @@ Set Padding 10
 Set Framerate 1
 
 Hide
-Type "./target/release/abtop --demo --theme nord"
+Type "./target/release/llmtop --demo --theme nord"
 Enter
 Sleep 3s
 Show

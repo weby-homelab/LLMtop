@@ -999,7 +999,7 @@ mod tests {
 
     #[test]
     fn fmt_age_buckets() {
-        // t() defaults to English when ABTOP_LANG is unset, so the strings
+        // t() defaults to English when LLMTOP_LANG is unset, so the strings
         // here match the en-US locale values for `time.{s,m,h,d}_ago`.
         assert_eq!(fmt_age(5), "5s ago");
         assert_eq!(fmt_age(59), "59s ago");

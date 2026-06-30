@@ -99,9 +99,9 @@ impl OpenCodeCollector {
             if !self.warned_sqlite3_missing {
                 self.warned_sqlite3_missing = true;
                 eprintln!(
-                    "abtop: OpenCode database found at {} but the `sqlite3` CLI is not on PATH; \
+                    "llmtop: OpenCode database found at {} but the `sqlite3` CLI is not on PATH; \
                      OpenCode sessions will not appear. Install it (e.g. `winget install SQLite.SQLite`) \
-                     and restart abtop.",
+                     and restart llmtop.",
                     self.db_path.display()
                 );
             }
