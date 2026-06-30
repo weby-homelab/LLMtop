@@ -3,8 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 
 const STATUSLINE_SCRIPT: &str = r#"#!/bin/bash
-# abtop StatusLine hook — writes rate limit data for abtop to read.
-# Installed by: abtop --setup
+# llmtop StatusLine hook — writes rate limit data for llmtop to read.
+# Installed by: llmtop --setup
 # Reads JSON from stdin with a 5s timeout, pipes it to python via stdin
 # to avoid ARG_MAX limits on large payloads.
 INPUT=""
@@ -27,7 +27,7 @@ sd = rl.get('seven_day')
 if sd:
     out['seven_day'] = {'used_percentage': sd.get('used_percentage', 0), 'resets_at': sd.get('resets_at', 0)}
 config_dir = os.environ.get('CLAUDE_CONFIG_DIR', os.path.join(os.path.expanduser('~'), '.claude'))
-with open(os.path.join(config_dir, 'abtop-rate-limits.json'), 'w') as f:
+with open(os.path.join(config_dir, 'llmtop-rate-limits.json'), 'w') as f:
     json.dump(out, f)
 " 2>/dev/null
 "#;
@@ -41,7 +41,7 @@ fn claude_dir() -> PathBuf {
 }
 
 fn script_path() -> PathBuf {
-    claude_dir().join("abtop-statusline.sh")
+    claude_dir().join("llmtop-statusline.sh")
 }
 
 fn settings_path() -> PathBuf {
@@ -49,7 +49,7 @@ fn settings_path() -> PathBuf {
 }
 
 pub fn run_setup() {
-    println!("abtop --setup: configuring Claude Code StatusLine hook\n");
+    println!("llmtop --setup: configuring Claude Code StatusLine hook\n");
 
     // Ensure ~/.claude directory exists
     let dir = claude_dir();
@@ -140,6 +140,6 @@ pub fn run_setup() {
         }
     }
 
-    println!("\n  done! rate limit data will appear in abtop after the next Claude response.");
+    println!("\n  done! rate limit data will appear in llmtop after the next Claude response.");
     println!("  restart any running Claude Code sessions to activate.");
 }

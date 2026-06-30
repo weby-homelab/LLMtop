@@ -1,13 +1,13 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve abtop
+about: Report a bug to help us improve LLMtop
 labels: bug
 ---
 
 **Environment**
 - OS: <!-- macOS / Linux -->
-- abtop version: <!-- `abtop --version` -->
-- Claude Code version: <!-- `claude --version` -->
+- LLMtop version: <!-- `llmtop --version` -->
+- Local LLM Runner/Version: <!-- e.g. Ollama v0.1.48 / llama.cpp / vLLM -->
 - Terminal: <!-- e.g. iTerm2, Alacritty, tmux -->
 
 **Describe the bug**

@@ -8,7 +8,7 @@ Set Padding 10
 Set Framerate 1
 
 Hide
-Type "./target/release/abtop --demo --theme high-contrast"
+Type "./target/release/llmtop --demo --theme high-contrast"
 Enter
 Sleep 3s
 Show

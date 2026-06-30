@@ -200,7 +200,7 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("quota.5h", "5h");
     m.insert("quota.7d", "7d");
     m.insert("quota.no_data", "no data");
-    m.insert("quota.abtop_setup", "abtop --setup");
+    m.insert("quota.abtop_setup", "llmtop --setup");
     m.insert("quota.run_codex", "run codex once");
     m.insert("quota.total", "total");
     m.insert("quota.in", "in");
@@ -445,7 +445,7 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("quota.5h", "5小时");
     m.insert("quota.7d", "7天");
     m.insert("quota.no_data", "无数据");
-    m.insert("quota.abtop_setup", "abtop --setup");
+    m.insert("quota.abtop_setup", "llmtop --setup");
     m.insert("quota.run_codex", "运行一次 codex");
     m.insert("quota.total", "总计");
     m.insert("quota.in", "还有");

@@ -927,11 +927,11 @@ fn generate_summary(prompt: &str, assistant_text: &str) -> Option<String> {
     }
 }
 
-/// Cache directory: ~/.cache/abtop/
+/// Cache directory: ~/.cache/llmtop/
 fn cache_dir() -> std::path::PathBuf {
     dirs::cache_dir()
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".cache"))
-        .join("abtop")
+        .join("llmtop")
 }
 
 fn cache_path() -> std::path::PathBuf {

@@ -1,13 +1,13 @@
 #!/bin/bash
-# abtop StatusLine hook for Claude Code
+# llmtop StatusLine hook for Claude Code
 # Reads StatusLine JSON from stdin and writes rate limit data to a file.
 #
 # Install: add to ~/.claude/settings.json:
-#   "statusLine": { "command": "/path/to/abtop-statusline.sh" }
+#   "statusLine": { "command": "/path/to/llmtop-statusline.sh" }
 #
-# Or run: abtop --setup
+# Or run: llmtop --setup
 
-OUTPUT_FILE="$HOME/.claude/abtop-rate-limits.json"
+OUTPUT_FILE="$HOME/.claude/llmtop-rate-limits.json"
 
 # Read JSON from stdin
 input=$(cat)
