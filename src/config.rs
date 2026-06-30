@@ -41,8 +41,10 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let mut panels = PanelVisibility::default();
-        panels.quota = false;
+        let panels = PanelVisibility {
+            quota: false,
+            ..Default::default()
+        };
         Self {
             theme: "btop".to_string(),
             hidden_agents: Vec::new(),
