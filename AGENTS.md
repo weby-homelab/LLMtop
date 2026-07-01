@@ -32,7 +32,6 @@ src/
 │   ├── mod.rs              # UI layout composer and drawing dispatch
 │   ├── config.rs           # Config menu drawer
 │   ├── context.rs          # Context window gauges and sparkline drawer
-│   ├── quota.rs            # Quota panel (rate limit gauges/stubs)
 │   ├── tokens.rs           # Token count breakdown panels
 │   ├── projects.rs         # Active projects status drawer
 │   ├── ports.rs            # Port allocations and orphan ports panel
@@ -68,16 +67,16 @@ src/
 │  token rate (200pt history)            V1 qwen2.5     █████████91%⚠ │
 │                                        L1 slot-0      ███      22%  │
 └──────────────────────────────────────────────────────────────────────┘
-┌─ ²quota ─────┐┌─ ³tokens ───┐┌─ projects ───┐┌─ ⁴ports ──────────┐
-│ OLLAMA       ││ Total  1.2M ││ LLMtop       ││ PORT  SESSION  CMD │
-│ 5h ████ 35%  ││ Input  402k ││  main +3 ~18 ││ :11434 Ollama  ollm│
-│   resets 2h  ││ Output  89k ││              ││ :8080 llama.c  llma│
-│ 7d ██ 12%    ││ Cache  710k ││ prediction   ││                    │
-│              ││ ▁▃▅▇█▇▅▃▁▃▅││  feat/x +1~2 ││ ORPHAN PORTS       │
-│ LLAMA.CPP    ││ Turns: 48   ││              ││ :4000 old-prj node│
-│ 5h █ 9%      ││ Avg: 25k/t  ││ api-server   ││                    │
-│ 7d ██ 14%    ││             ││  main ✓clean ││                    │
-└──────────────┘└─────────────┘└──────────────┘└────────────────────┘
+┌─ ²tokens ───┐┌─ ³projects ──┐┌─ ⁴ports ──────────┐
+│ Total  1.2M ││ LLMtop       ││ PORT  SESSION  CMD │
+│ Input  402k ││  main +3 ~18 ││ :11434 Ollama  ollm│
+│ Output  89k ││              ││ :8080 llama.c  llma│
+│ Cache  710k ││ prediction   ││                    │
+│ ▁▃▅▇█▇▅▃▁▃▅││  feat/x +1~2 ││ ORPHAN PORTS       │
+│ Turns: 48   ││              ││ :4000 old-prj node│
+│ Avg: 25k/t  ││ api-server   ││                    │
+│             ││  main ✓clean ││                    │
+└─────────────┘└──────────────┘└────────────────────┘
 ┌─ ⁵sessions ─────────────────────────────────────────────────────────┐
 │ ►*OL 7336 ollama  ● Work llama3 82% 1.2M  48  VRAM: 6.1 GB / 8 GB   │
 │  >LC 8840 llama.c ◌ Wait mistrl 91% 340k  12  waiting                │
@@ -92,15 +91,14 @@ src/
 
 Panel rendering priority (top to bottom):
 1. **Sessions** — always visible, gets priority allocation (min 5 rows, ideal = 2/session + 7)
-2. **Mid-tier** (quota, tokens, projects, ports) — split equally, shown if space allows
+2. **Mid-tier** (tokens, projects, ports) — split equally, shown if space allows
 3. **Context** — only renders when sessions have ideal height AND surplus >= 5 rows
 4. **Header** (1 row) + **Footer** (1 row) — always present
 
 Panel descriptions:
 - **¹context**: Left = token rate braille sparkline (200-point history). Right = per-session context % bars with yellow/red warning.
-- **²quota**: Local inference server rate limit gauges side-by-side (5h and 7d windows with reset countdown). This panel is disabled by default for purely local LLM runs.
-- **³tokens**: Total token breakdown (in/out/cache) + per-turn sparkline for selected session.
-- **projects** (always visible): Per-project git branch + added/modified file counts.
+- **²tokens**: Total token breakdown (in/out/cache) + per-turn sparkline for selected session.
+- **³projects** (always visible): Per-project git branch + added/modified file counts.
 - **⁴ports**: Agent-spawned open ports + orphan ports (from dead sessions). Conflict detection.
 - **⁵sessions**: Full-width panel below mid row. Session list table (top) + selected session detail (bottom), separated by divider.
 

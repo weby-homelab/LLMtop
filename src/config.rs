@@ -3,7 +3,6 @@ use std::path::PathBuf;
 #[derive(Clone, Copy)]
 pub struct PanelVisibility {
     pub context: bool,
-    pub quota: bool,
     pub tokens: bool,
     pub projects: bool,
     pub ports: bool,
@@ -15,7 +14,6 @@ impl Default for PanelVisibility {
     fn default() -> Self {
         Self {
             context: true,
-            quota: true,
             tokens: true,
             projects: true,
             ports: true,
@@ -41,10 +39,7 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let panels = PanelVisibility {
-            quota: false,
-            ..Default::default()
-        };
+        let panels = PanelVisibility::default();
         Self {
             theme: "btop".to_string(),
             hidden_agents: Vec::new(),
@@ -102,7 +97,6 @@ fn parse_config_body(content: &str) -> AppConfig {
                 "theme" => config.theme = val.to_string(),
                 "language" => config.language = val.to_string(),
                 "show_context" => config.panels.context = parse_bool(val).unwrap_or(true),
-                "show_quota" => config.panels.quota = parse_bool(val).unwrap_or(true),
                 "show_tokens" => config.panels.tokens = parse_bool(val).unwrap_or(true),
                 "show_projects" => config.panels.projects = parse_bool(val).unwrap_or(true),
                 "show_ports" => config.panels.ports = parse_bool(val).unwrap_or(true),
@@ -165,7 +159,6 @@ pub fn save_theme(name: &str) -> Result<(), String> {
 pub fn save_panel_visibility(panels: &PanelVisibility) -> Result<(), String> {
     write_with_updates(&[
         ("show_context", panels.context.to_string()),
-        ("show_quota", panels.quota.to_string()),
         ("show_tokens", panels.tokens.to_string()),
         ("show_projects", panels.projects.to_string()),
         ("show_ports", panels.ports.to_string()),
@@ -300,14 +293,14 @@ mod tests {
 
     #[test]
     fn rewrite_panels_replaces_existing_and_appends_missing() {
-        let before = "theme = \"btop\"\nshow_quota = true\n";
+        let before = "theme = \"btop\"\nshow_context = true\n";
         let updates: Vec<(&str, String)> = vec![
-            ("show_quota", "false".to_string()),
+            ("show_context", "false".to_string()),
             ("show_projects", "false".to_string()),
         ];
         let after = rewrite_kv_lines(before, &updates);
-        assert!(after.contains("show_quota = false"));
-        assert!(!after.contains("show_quota = true"));
+        assert!(after.contains("show_context = false"));
+        assert!(!after.contains("show_context = true"));
         assert!(after.contains("show_projects = false"));
         assert!(after.contains("theme = \"btop\""));
     }

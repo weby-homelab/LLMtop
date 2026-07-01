@@ -68,7 +68,6 @@ pub enum NarrowSection {
     Sessions,
     Projects,
     Context,
-    Quota,
     Tokens,
     Ports,
     Mcp,
@@ -78,7 +77,7 @@ impl NarrowSection {
     pub fn tab(self) -> NarrowTab {
         match self {
             Self::Sessions | Self::Projects => NarrowTab::Work,
-            Self::Context | Self::Quota | Self::Tokens => NarrowTab::Usage,
+            Self::Context | Self::Tokens => NarrowTab::Usage,
             Self::Ports | Self::Mcp => NarrowTab::System,
         }
     }
@@ -115,7 +114,6 @@ pub struct App {
     kill_confirm: Option<(usize, Instant)>,
     pub theme: Theme,
     pub show_context: bool,
-    pub show_quota: bool,
     pub show_tokens: bool,
     pub show_projects: bool,
     pub show_ports: bool,
@@ -191,7 +189,6 @@ impl App {
             kill_confirm: None,
             theme,
             show_context: panels.context,
-            show_quota: panels.quota,
             show_tokens: panels.tokens,
             show_projects: panels.projects,
             show_ports: panels.ports,
@@ -263,7 +260,6 @@ impl App {
     fn persist_panel_visibility(&mut self) {
         let panels = crate::config::PanelVisibility {
             context: self.show_context,
-            quota: self.show_quota,
             tokens: self.show_tokens,
             projects: self.show_projects,
             ports: self.show_ports,
@@ -321,7 +317,7 @@ impl App {
     pub fn narrow_tab_visible(&self, tab: NarrowTab) -> bool {
         match tab {
             NarrowTab::Work => self.show_sessions || self.show_projects,
-            NarrowTab::Usage => self.show_context || self.show_quota || self.show_tokens,
+            NarrowTab::Usage => self.show_context || self.show_tokens,
             NarrowTab::System => self.show_ports || self.show_mcp,
         }
     }
@@ -384,7 +380,6 @@ impl App {
             NarrowSection::Sessions => self.show_sessions,
             NarrowSection::Projects => self.show_projects,
             NarrowSection::Context => self.show_context,
-            NarrowSection::Quota => self.show_quota,
             NarrowSection::Tokens => self.show_tokens,
             NarrowSection::Ports => self.show_ports,
             NarrowSection::Mcp => self.show_mcp,
@@ -396,7 +391,6 @@ impl App {
             NarrowTab::Work => &[NarrowSection::Sessions, NarrowSection::Projects],
             NarrowTab::Usage => &[
                 NarrowSection::Context,
-                NarrowSection::Quota,
                 NarrowSection::Tokens,
             ],
             NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp],
@@ -502,7 +496,7 @@ impl App {
     /// `tick` additionally calls [`App::drain_and_retry_summaries`], which
     /// shells out to `claude --print` to generate session titles. Headless
     /// consumers (e.g. the web snapshot API) call this variant so they never
-    /// spawn subprocesses or consume the user's Claude quota.
+    /// spawn subprocesses.
     pub fn tick_no_summaries(&mut self) {
         self.collector.set_mcp_suppress(self.mcp_suppress_sessions);
         self.sessions = self.collector.collect();
