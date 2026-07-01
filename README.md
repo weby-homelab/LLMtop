@@ -6,6 +6,8 @@ See every active local LLM session, model usage, context window, rate limits, ch
 
 LLMtop auto-discovers active agents and servers from local process/file state and active network ports across macOS, Linux, and Windows.
 
+![LLMtop TUI Screenshot](LLMtop-Screen-1.png)
+
 ```mermaid
 graph TD
     A["llmtop TUI"] --> B["MultiCollector"]
