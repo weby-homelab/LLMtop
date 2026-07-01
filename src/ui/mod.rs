@@ -6,7 +6,6 @@ mod help;
 mod mcp;
 mod ports;
 mod projects;
-mod quota;
 mod sessions;
 mod tokens;
 mod view_menu;
@@ -91,34 +90,6 @@ pub(crate) fn meter_bar(
     spans
 }
 
-/// Meter bar showing remaining quota: filled = remaining, color reflects urgency.
-/// When remaining is high → green (safe), when low → red (danger).
-pub(crate) fn remaining_bar(
-    remaining_pct: f64,
-    width: usize,
-    gradient: &[Color; 101],
-    meter_bg: Color,
-) -> Vec<Span<'static>> {
-    if width == 0 {
-        return Vec::new();
-    }
-    let clamped = remaining_pct.clamp(0.0, 100.0);
-    let filled = ((clamped / 100.0) * width as f64).round() as usize;
-    let used_pct = 100.0 - clamped;
-    let mut spans = Vec::new();
-    for i in 0..width {
-        if i < filled {
-            let cell_pct = used_pct;
-            spans.push(Span::styled(
-                "■",
-                Style::default().fg(grad_at(gradient, cell_pct)),
-            ));
-        } else {
-            spans.push(Span::styled("■", Style::default().fg(meter_bg)));
-        }
-    }
-    spans
-}
 
 // ── braille sparkline ────────────────────────────────────────────────────────
 
@@ -392,7 +363,6 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     for (section, area) in layout.mid {
         match section {
-            NarrowSection::Quota => quota::draw_quota_panel(f, app, area, theme),
             NarrowSection::Tokens => tokens::draw_tokens_panel(f, app, area, theme),
             NarrowSection::Projects => projects::draw_projects_panel(f, app, area, theme),
             NarrowSection::Ports => ports::draw_ports_panel(f, app, area, theme),
@@ -415,9 +385,6 @@ fn desktop_layout(app: &App, area: Rect) -> DesktopLayout {
     const MID_MIN: u16 = 6;
 
     let mut mid_sections = Vec::new();
-    if app.show_quota {
-        mid_sections.push(NarrowSection::Quota);
-    }
     if app.show_tokens {
         mid_sections.push(NarrowSection::Tokens);
     }
@@ -665,7 +632,6 @@ fn draw_narrow_section(
             projects::draw_projects_panel_active(f, app, area, theme, active)
         }
         NarrowSection::Context => context::draw_context_panel_active(f, app, area, theme, active),
-        NarrowSection::Quota => quota::draw_quota_panel_active(f, app, area, theme, active),
         NarrowSection::Tokens => tokens::draw_tokens_panel_active(f, app, area, theme, active),
         NarrowSection::Ports => ports::draw_ports_panel_active(f, app, area, theme, active),
         NarrowSection::Mcp => mcp::draw_mcp_panel_active(f, app, area, theme, active),
@@ -1006,7 +972,7 @@ mod tests {
         assert_eq!(fmt_age(60), "1m ago");
         assert_eq!(fmt_age(125), "2m ago");
         assert_eq!(fmt_age(7_200), "2h ago");
-        // Regression: the quota panel used to render this raw as "341493ago"
+        // Regression: the age formatting used to render this raw as "341493ago"
         // because it formatted seconds without unit conversion.
         assert_eq!(fmt_age(341_493), "3d ago");
     }
@@ -1045,7 +1011,7 @@ mod tests {
                 "{w}x{h} should be supported\n{text}"
             );
             assert!(
-                !text.contains("quota"),
+                !text.contains("tokens"),
                 "{w}x{h} should not spend first screen on mid panels\n{text}"
             );
         }
@@ -1062,10 +1028,6 @@ mod tests {
         terminal.draw(|f| draw(f, &app)).unwrap();
         let text = format!("{}", terminal.backend());
 
-        assert!(
-            text.contains("quota"),
-            "usage tab should render quota panel\n{text}"
-        );
         assert!(
             text.contains("tokens"),
             "usage tab should render tokens panel\n{text}"
@@ -1204,7 +1166,7 @@ mod tests {
         let body = narrow_chunks(area)[1];
 
         let usage_sections = narrow_section_areas(&app, NarrowTab::Usage, body);
-        assert_eq!(usage_sections.len(), 3);
+        assert_eq!(usage_sections.len(), 2);
         let min_h = usage_sections
             .iter()
             .map(|(_, area)| area.height)
@@ -1253,21 +1215,21 @@ mod tests {
         };
         let body = narrow_chunks(area)[1];
 
-        app.toggle_narrow_section_zoom(NarrowSection::Quota);
+        app.toggle_narrow_section_zoom(NarrowSection::Tokens);
         let sections = narrow_section_areas(&app, NarrowTab::Usage, body);
         assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0], (NarrowSection::Quota, body));
+        assert_eq!(sections[0], (NarrowSection::Tokens, body));
 
         let backend = TestBackend::new(69, 27);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| draw(f, &app)).unwrap();
         let text = format!("{}", terminal.backend());
         assert!(
-            text.contains("quota(*)"),
+            text.contains("tokens") && text.contains("(*)"),
             "zoomed section should stay active\n{text}"
         );
         assert!(
-            !text.contains("tokens"),
+            !text.contains("context"),
             "zoomed tab should hide peer sections\n{text}"
         );
     }
@@ -1334,7 +1296,7 @@ mod tests {
     #[test]
     fn desktop_size_keeps_mid_panels() {
         let text = render_demo(120, 40);
-        for label in ["quota", "tokens", "projects", "ports", "sessions"] {
+        for label in ["tokens", "projects", "ports", "sessions"] {
             assert!(
                 text.contains(label),
                 "desktop should render {label}\n{text}"
