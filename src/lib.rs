@@ -55,6 +55,7 @@ pub mod app;
 pub mod collector;
 pub mod config;
 pub mod demo;
+pub mod gpu;
 pub mod host_info;
 pub mod jump;
 pub mod locale;
@@ -253,7 +254,7 @@ fn run_app(
                             KeyCode::Char('T') => app.tree_view = !app.tree_view,
                             KeyCode::Char('l') => app.toggle_timeline(),
                             KeyCode::Char('f') => app.toggle_file_audit(),
-                            KeyCode::Char(c @ '1'..='6') => app.toggle_panel(c as u8 - b'0'),
+                            KeyCode::Char(c @ '1'..='8') => app.toggle_panel(c as u8 - b'0'),
                             KeyCode::Char('M') => app.toggle_mcp_session_suppression(),
                             KeyCode::Char('t') => app.cycle_theme(),
                             _ => {}
@@ -298,7 +299,7 @@ fn run_app(
                             KeyCode::Char('t') => app.cycle_theme(),
                             KeyCode::Char('T') => app.tree_view = !app.tree_view,
                             KeyCode::Char('l') | KeyCode::Char('L') => app.toggle_timeline(),
-                            KeyCode::Char(c @ '1'..='6') => app.toggle_panel(c as u8 - b'0'),
+                            KeyCode::Char(c @ '1'..='8') => app.toggle_panel(c as u8 - b'0'),
                             KeyCode::Char('M') => app.toggle_mcp_session_suppression(),
                             KeyCode::Char('c') => app.toggle_config(),
                             KeyCode::Char('v') => app.toggle_view_menu(),
@@ -385,16 +386,7 @@ fn handle_mouse_event(app: &mut App, mouse: MouseEvent, area: Rect) {
 /// overrides from a string for safe terminal output. Defeats CVE-2021-42574
 /// (Trojan Source) style attacks via RTLO/LRO/PDF/isolate characters.
 fn sanitize_output(s: &str) -> String {
-    s.chars()
-        .filter(|c| {
-            !c.is_control()
-                && !matches!(*c,
-                '\u{202A}'..='\u{202E}'
-                | '\u{2066}'..='\u{2069}'
-                | '\u{200E}'
-                | '\u{200F}')
-        })
-        .collect()
+    crate::collector::sanitize_terminal_text(s)
 }
 
 fn print_snapshot(app: &App) {

@@ -1,4 +1,6 @@
 use crate::collector::{read_rate_limits, McpServer, MultiCollector};
+use crate::collector::rate_limit::read_opencode_rate_limits;
+use crate::gpu::{GpuMetrics, GpuSampler};
 use crate::host_info::{AgentAggregate, HostMetrics, HostSampler};
 use crate::model::{AgentSession, OrphanPort, RateLimitInfo, SessionStatus};
 use crate::theme::Theme;
@@ -68,17 +70,19 @@ pub enum NarrowSection {
     Sessions,
     Projects,
     Context,
+    Quota,
     Tokens,
     Ports,
     Mcp,
+    Gpu,
 }
 
 impl NarrowSection {
     pub fn tab(self) -> NarrowTab {
         match self {
             Self::Sessions | Self::Projects => NarrowTab::Work,
-            Self::Context | Self::Tokens => NarrowTab::Usage,
-            Self::Ports | Self::Mcp => NarrowTab::System,
+            Self::Context | Self::Quota | Self::Tokens => NarrowTab::Usage,
+            Self::Ports | Self::Mcp | Self::Gpu => NarrowTab::System,
         }
     }
 }
@@ -114,11 +118,13 @@ pub struct App {
     kill_confirm: Option<(usize, Instant)>,
     pub theme: Theme,
     pub show_context: bool,
+    pub show_quota: bool,
     pub show_tokens: bool,
     pub show_projects: bool,
     pub show_ports: bool,
     pub show_sessions: bool,
     pub show_mcp: bool,
+    pub show_gpu: bool,
     pub narrow_tab: NarrowTab,
     pub active_narrow_section: Option<NarrowSection>,
     pub maximized_narrow_section: Option<NarrowSection>,
@@ -141,6 +147,8 @@ pub struct App {
     host_sampler: HostSampler,
     /// Latest host metrics snapshot (None until first valid sample).
     pub host_metrics: Option<HostMetrics>,
+    pub gpu_metrics: Vec<GpuMetrics>,
+    gpu_sampler: GpuSampler,
     /// Aggregate metrics across all sessions (recomputed each tick).
     pub agent_aggregate: AgentAggregate,
     /// Help overlay (`?`) visibility.
@@ -189,11 +197,13 @@ impl App {
             kill_confirm: None,
             theme,
             show_context: panels.context,
+            show_quota: panels.quota,
             show_tokens: panels.tokens,
             show_projects: panels.projects,
             show_ports: panels.ports,
             show_sessions: panels.sessions,
             show_mcp: panels.mcp,
+            show_gpu: panels.gpu,
             narrow_tab: NarrowTab::Work,
             active_narrow_section: Some(NarrowSection::Sessions),
             maximized_narrow_section: None,
@@ -209,6 +219,8 @@ impl App {
             show_file_audit: false,
             host_sampler: HostSampler::new(),
             host_metrics: None,
+            gpu_metrics: Vec::new(),
+            gpu_sampler: GpuSampler::new(),
             agent_aggregate: AgentAggregate::default(),
             help_open: false,
             view_open: false,
@@ -232,11 +244,13 @@ impl App {
     pub fn toggle_panel(&mut self, panel: u8) {
         match panel {
             1 => self.show_context = !self.show_context,
-            2 => self.show_tokens = !self.show_tokens,
-            3 => self.show_projects = !self.show_projects,
-            4 => self.show_ports = !self.show_ports,
-            5 => self.show_sessions = !self.show_sessions,
-            6 => self.show_mcp = !self.show_mcp,
+            2 => self.show_quota = !self.show_quota,
+            3 => self.show_tokens = !self.show_tokens,
+            4 => self.show_projects = !self.show_projects,
+            5 => self.show_ports = !self.show_ports,
+            6 => self.show_sessions = !self.show_sessions,
+            7 => self.show_mcp = !self.show_mcp,
+            8 => self.show_gpu = !self.show_gpu,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -260,11 +274,13 @@ impl App {
     fn persist_panel_visibility(&mut self) {
         let panels = crate::config::PanelVisibility {
             context: self.show_context,
+            quota: self.show_quota,
             tokens: self.show_tokens,
             projects: self.show_projects,
             ports: self.show_ports,
             sessions: self.show_sessions,
             mcp: self.show_mcp,
+            gpu: self.show_gpu,
         };
         if let Err(e) = crate::config::save_panel_visibility(&panels) {
             self.set_status(format!("panels save failed: {}", e));
@@ -283,7 +299,7 @@ impl App {
     }
 
     pub fn config_item_count(&self) -> usize {
-        8 // theme + 7 panel toggles
+        9
     }
 
     pub fn config_select_next(&mut self) {
@@ -303,11 +319,13 @@ impl App {
                 return;
             }
             1 => self.show_context = !self.show_context,
-            2 => self.show_tokens = !self.show_tokens,
-            3 => self.show_projects = !self.show_projects,
-            4 => self.show_ports = !self.show_ports,
-            5 => self.show_sessions = !self.show_sessions,
-            6 => self.show_mcp = !self.show_mcp,
+            2 => self.show_quota = !self.show_quota,
+            3 => self.show_tokens = !self.show_tokens,
+            4 => self.show_projects = !self.show_projects,
+            5 => self.show_ports = !self.show_ports,
+            6 => self.show_sessions = !self.show_sessions,
+            7 => self.show_mcp = !self.show_mcp,
+            8 => self.show_gpu = !self.show_gpu,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -317,8 +335,8 @@ impl App {
     pub fn narrow_tab_visible(&self, tab: NarrowTab) -> bool {
         match tab {
             NarrowTab::Work => self.show_sessions || self.show_projects,
-            NarrowTab::Usage => self.show_context || self.show_tokens,
-            NarrowTab::System => self.show_ports || self.show_mcp,
+            NarrowTab::Usage => self.show_context || self.show_quota || self.show_tokens,
+            NarrowTab::System => self.show_ports || self.show_mcp || self.show_gpu,
         }
     }
 
@@ -380,9 +398,11 @@ impl App {
             NarrowSection::Sessions => self.show_sessions,
             NarrowSection::Projects => self.show_projects,
             NarrowSection::Context => self.show_context,
+            NarrowSection::Quota => self.show_quota,
             NarrowSection::Tokens => self.show_tokens,
             NarrowSection::Ports => self.show_ports,
             NarrowSection::Mcp => self.show_mcp,
+            NarrowSection::Gpu => self.show_gpu,
         }
     }
 
@@ -391,9 +411,10 @@ impl App {
             NarrowTab::Work => &[NarrowSection::Sessions, NarrowSection::Projects],
             NarrowTab::Usage => &[
                 NarrowSection::Context,
+                NarrowSection::Quota,
                 NarrowSection::Tokens,
             ],
-            NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp],
+            NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp, NarrowSection::Gpu],
         };
         sections
             .iter()
@@ -483,6 +504,45 @@ impl App {
         self.status_msg = Some((msg, Instant::now()));
     }
 
+    pub fn check_alerts(&self) -> Vec<String> {
+        let mut alerts = Vec::new();
+
+        for s in &self.sessions {
+            if s.context_percent > 90.0 {
+                alerts.push(format!(
+                    "{}: context at {:.0}%",
+                    s.project_name, s.context_percent
+                ));
+            }
+        }
+
+        for rl in &self.rate_limits {
+            if rl.five_hour_pct.is_some_and(|p| p > 80.0) {
+                alerts.push(format!(
+                    "{}: 5h rate limit at {:.0}%",
+                    rl.source.to_uppercase(),
+                    rl.five_hour_pct.unwrap()
+                ));
+            }
+            if rl.seven_day_pct.is_some_and(|p| p > 80.0) {
+                alerts.push(format!(
+                    "{}: 7d rate limit at {:.0}%",
+                    rl.source.to_uppercase(),
+                    rl.seven_day_pct.unwrap()
+                ));
+            }
+        }
+
+        if !self.orphan_ports.is_empty() {
+            alerts.push(format!(
+                "{} orphan port(s) detected",
+                self.orphan_ports.len()
+            ));
+        }
+
+        alerts
+    }
+
     /// Full refresh used by the TUI: collect monitored data, then generate and
     /// retry session summaries. Equivalent to [`App::tick_no_summaries`] followed
     /// by [`App::drain_and_retry_summaries`].
@@ -503,6 +563,7 @@ impl App {
         self.orphan_ports = self.collector.orphan_ports.clone();
         self.mcp_servers = self.collector.mcp_servers.clone();
         self.host_metrics = self.host_sampler.sample();
+        self.gpu_metrics = self.gpu_sampler.sample();
         self.agent_aggregate = AgentAggregate::from_sessions(&self.sessions);
         if self.selected >= self.sessions.len() && !self.sessions.is_empty() {
             self.selected = self.sessions.len() - 1;
@@ -532,13 +593,20 @@ impl App {
             self.rate_limit_counter = 0;
             let extra_dirs = self.collector.all_config_dirs();
             self.rate_limits = read_rate_limits(&extra_dirs);
-            // Merge live rate limits from agent collectors (e.g. Codex JSONL parsing)
             self.rate_limits.extend(self.collector.agent_rate_limits());
+            self.rate_limits.extend(read_opencode_rate_limits());
         } else {
             self.rate_limit_counter += 1;
         }
 
         promote_waiting_to_rate_limited(&mut self.sessions, &self.rate_limits);
+
+        if self.status_msg.is_none() {
+            let alerts = self.check_alerts();
+            if let Some(first) = alerts.first() {
+                self.set_status(first.clone());
+            }
+        }
     }
 
     /// Drain completed summary results and spawn retries. Does NOT recollect
@@ -727,8 +795,18 @@ impl App {
                     return;
                 }
                 let _ = std::process::Command::new("kill")
-                    .args(["-9", &pid.to_string()])
+                    .args(["-15", &pid.to_string()])
                     .output();
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                if std::process::Command::new("kill")
+                    .args(["-0", &pid.to_string()])
+                    .status()
+                    .is_ok_and(|s| s.success())
+                {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid.to_string()])
+                        .output();
+                }
                 self.tick();
                 return;
             }
@@ -955,7 +1033,16 @@ fn load_summary_cache() -> HashMap<String, String> {
 fn save_summary_cache(summaries: &HashMap<String, String>) {
     let path = cache_path();
     let _ = std::fs::create_dir_all(cache_dir());
-    if let Ok(json) = serde_json::to_string(summaries) {
+    let mut bounded = summaries.clone();
+    const MAX_CACHED_SUMMARIES: usize = 500;
+    while bounded.len() > MAX_CACHED_SUMMARIES {
+        if let Some(oldest_key) = bounded.keys().next().cloned() {
+            bounded.remove(&oldest_key);
+        } else {
+            break;
+        }
+    }
+    if let Ok(json) = serde_json::to_string(&bounded) {
         let tmp = path.with_extension("tmp");
         if std::fs::write(&tmp, &json).is_ok() {
             let _ = std::fs::rename(&tmp, &path);

@@ -48,28 +48,38 @@ pub(crate) fn items(app: &App) -> Vec<ViewItem> {
         },
         ViewItem {
             key: '2',
+            label: t("view.quota_panel").leak(),
+            state: bool_state(app.show_quota),
+        },
+        ViewItem {
+            key: '3',
             label: t("view.tokens_panel").leak(),
             state: bool_state(app.show_tokens),
         },
         ViewItem {
-            key: '3',
+            key: '4',
             label: t("view.projects_panel").leak(),
             state: bool_state(app.show_projects),
         },
         ViewItem {
-            key: '4',
+            key: '5',
             label: t("view.ports_panel").leak(),
             state: bool_state(app.show_ports),
         },
         ViewItem {
-            key: '5',
+            key: '6',
             label: t("view.sessions_panel").leak(),
             state: bool_state(app.show_sessions),
         },
         ViewItem {
-            key: '6',
+            key: '7',
             label: t("view.mcp_servers_panel").leak(),
             state: bool_state(app.show_mcp),
+        },
+        ViewItem {
+            key: '8',
+            label: t("view.gpu_panel").leak(),
+            state: bool_state(app.show_gpu),
         },
         ViewItem {
             key: 'M',

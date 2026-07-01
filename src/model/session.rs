@@ -242,14 +242,7 @@ impl SessionFile {
 
 /// Truncate a string at a char boundary to avoid panics on multi-byte UTF-8.
 fn truncate_string(s: &mut String, max_bytes: usize) {
-    if s.len() > max_bytes {
-        // Find the last char boundary at or before max_bytes
-        let mut end = max_bytes;
-        while end > 0 && !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        s.truncate(end);
-    }
+    crate::collector::truncate_at_char_boundary(s, max_bytes);
 }
 
 #[cfg(test)]

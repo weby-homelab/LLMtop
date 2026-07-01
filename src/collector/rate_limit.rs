@@ -8,6 +8,8 @@ const CLAUDE_RATE_FILE: &str = "llmtop-rate-limits.json";
 /// Cached Codex rate limit: ~/.cache/llmtop/codex-rate-limits.json
 const CODEX_CACHE_FILE: &str = "codex-rate-limits.json";
 
+const OPENCODE_RATE_FILE: &str = "llmtop-rate-limits.json";
+
 #[derive(Debug, Deserialize)]
 struct RateLimitFile {
     #[serde(default)]
@@ -55,6 +57,18 @@ pub fn read_rate_limits(extra_dirs: &[PathBuf]) -> Vec<RateLimitInfo> {
         }
     }
 
+    results
+}
+
+pub fn read_opencode_rate_limits() -> Vec<RateLimitInfo> {
+    let mut results = Vec::new();
+    let Some(home) = dirs::home_dir() else {
+        return results;
+    };
+    let path = home.join(".config").join("opencode").join(OPENCODE_RATE_FILE);
+    if let Some(info) = read_rate_file(&path, "opencode") {
+        results.push(info);
+    }
     results
 }
 

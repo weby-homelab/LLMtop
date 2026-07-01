@@ -1,11 +1,13 @@
 mod config;
 mod context;
 mod footer;
+mod gpu;
 mod header;
 mod help;
 mod mcp;
 mod ports;
 mod projects;
+mod quota;
 mod sessions;
 mod tokens;
 mod view_menu;
@@ -79,6 +81,34 @@ pub(crate) fn meter_bar(
     for i in 0..width {
         if i < filled {
             let cell_pct = (i as f64 / width as f64) * 100.0;
+            spans.push(Span::styled(
+                "■",
+                Style::default().fg(grad_at(gradient, cell_pct)),
+            ));
+        } else {
+            spans.push(Span::styled("■", Style::default().fg(meter_bg)));
+        }
+    }
+    spans
+}
+
+
+pub(crate) fn remaining_bar(
+    remaining_pct: f64,
+    width: usize,
+    gradient: &[Color; 101],
+    meter_bg: Color,
+) -> Vec<Span<'static>> {
+    if width == 0 {
+        return Vec::new();
+    }
+    let clamped = remaining_pct.clamp(0.0, 100.0);
+    let filled = ((clamped / 100.0) * width as f64).round() as usize;
+    let used_pct = 100.0 - clamped;
+    let mut spans = Vec::new();
+    for i in 0..width {
+        if i < filled {
+            let cell_pct = used_pct;
             spans.push(Span::styled(
                 "■",
                 Style::default().fg(grad_at(gradient, cell_pct)),
@@ -363,10 +393,12 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     for (section, area) in layout.mid {
         match section {
+            NarrowSection::Quota => quota::draw_quota_panel(f, app, area, theme),
             NarrowSection::Tokens => tokens::draw_tokens_panel(f, app, area, theme),
             NarrowSection::Projects => projects::draw_projects_panel(f, app, area, theme),
             NarrowSection::Ports => ports::draw_ports_panel(f, app, area, theme),
             NarrowSection::Mcp => mcp::draw_mcp_panel(f, app, area, theme),
+            NarrowSection::Gpu => gpu::draw_gpu_panel(f, app, area, theme),
             NarrowSection::Sessions | NarrowSection::Context => {}
         }
     }
@@ -385,6 +417,9 @@ fn desktop_layout(app: &App, area: Rect) -> DesktopLayout {
     const MID_MIN: u16 = 6;
 
     let mut mid_sections = Vec::new();
+    if app.show_quota {
+        mid_sections.push(NarrowSection::Quota);
+    }
     if app.show_tokens {
         mid_sections.push(NarrowSection::Tokens);
     }
@@ -396,6 +431,9 @@ fn desktop_layout(app: &App, area: Rect) -> DesktopLayout {
     }
     if app.show_mcp {
         mid_sections.push(NarrowSection::Mcp);
+    }
+    if app.show_gpu {
+        mid_sections.push(NarrowSection::Gpu);
     }
 
     let any_mid = !mid_sections.is_empty();
@@ -632,9 +670,11 @@ fn draw_narrow_section(
             projects::draw_projects_panel_active(f, app, area, theme, active)
         }
         NarrowSection::Context => context::draw_context_panel_active(f, app, area, theme, active),
+        NarrowSection::Quota => quota::draw_quota_panel_active(f, app, area, theme, active),
         NarrowSection::Tokens => tokens::draw_tokens_panel_active(f, app, area, theme, active),
         NarrowSection::Ports => ports::draw_ports_panel_active(f, app, area, theme, active),
         NarrowSection::Mcp => mcp::draw_mcp_panel_active(f, app, area, theme, active),
+        NarrowSection::Gpu => gpu::draw_gpu_panel_active(f, app, area, theme, active),
     }
 }
 
@@ -1161,12 +1201,12 @@ mod tests {
             x: 0,
             y: 0,
             width: 69,
-            height: 27,
+            height: 39,
         };
         let body = narrow_chunks(area)[1];
 
         let usage_sections = narrow_section_areas(&app, NarrowTab::Usage, body);
-        assert_eq!(usage_sections.len(), 2);
+        assert_eq!(usage_sections.len(), 3);
         let min_h = usage_sections
             .iter()
             .map(|(_, area)| area.height)
@@ -1215,17 +1255,17 @@ mod tests {
         };
         let body = narrow_chunks(area)[1];
 
-        app.toggle_narrow_section_zoom(NarrowSection::Tokens);
+        app.toggle_narrow_section_zoom(NarrowSection::Quota);
         let sections = narrow_section_areas(&app, NarrowTab::Usage, body);
         assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0], (NarrowSection::Tokens, body));
+        assert_eq!(sections[0], (NarrowSection::Quota, body));
 
         let backend = TestBackend::new(69, 27);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| draw(f, &app)).unwrap();
         let text = format!("{}", terminal.backend());
         assert!(
-            text.contains("tokens") && text.contains("(*)"),
+            text.contains("quota") && text.contains("(*)"),
             "zoomed section should stay active\n{text}"
         );
         assert!(
@@ -1296,7 +1336,7 @@ mod tests {
     #[test]
     fn desktop_size_keeps_mid_panels() {
         let text = render_demo(120, 40);
-        for label in ["tokens", "projects", "ports", "sessions"] {
+        for label in ["tokens", "projects", "ports", "sessions", "quota"] {
             assert!(
                 text.contains(label),
                 "desktop should render {label}\n{text}"

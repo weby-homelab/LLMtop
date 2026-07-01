@@ -127,7 +127,7 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("help.toggle_file_audit", "toggle file audit");
     m.insert(
         "help.toggle_panels",
-        "toggle panels (context/tokens/projects/ports/sessions/mcp)",
+        "toggle panels (context/quota/tokens/projects/ports/sessions/mcp/gpu)",
     );
     m.insert(
         "help.mcp_suppress",
@@ -159,11 +159,13 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("view.timeline", "timeline");
     m.insert("view.file_audit", "file audit");
     m.insert("view.context_panel", "context panel");
+    m.insert("view.quota_panel", "quota panel");
     m.insert("view.tokens_panel", "tokens panel");
     m.insert("view.projects_panel", "projects panel");
     m.insert("view.ports_panel", "ports panel");
     m.insert("view.sessions_panel", "sessions panel");
     m.insert("view.mcp_servers_panel", "mcp servers panel");
+    m.insert("view.gpu_panel", "GPU panel");
     m.insert("view.mcp_session_hide", "mcp session hide");
     m.insert("view.cycle_theme", "cycle theme");
     m.insert("view.key_toggle", "key = toggle  ·  Esc = close ");
@@ -216,6 +218,16 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("mcp.default", "default");
     m.insert("mcp.suppress_off", "suppress: off (M)");
 
+    m.insert("gpu.no_gpu", "no NVIDIA GPU detected");
+
+    m.insert("quota.5h", "5h");
+    m.insert("quota.7d", "7d");
+    m.insert("quota.no_data", "no data");
+    m.insert("quota.opencode_setup", "opencode --setup");
+    m.insert("quota.total", "total");
+    m.insert("quota.in", "in");
+    m.insert("quota.go_dzen", "Go Dzen");
+
     // Config panel
     m.insert("config.title", " Config ");
     m.insert("config.theme", "Theme");
@@ -224,11 +236,13 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("config.change", "Enter/Space to change");
     m.insert("config.close", "Esc to close");
     m.insert("config.context_panel", "Context panel (1)");
-    m.insert("config.tokens_panel", "Tokens panel (2)");
-    m.insert("config.projects_panel", "Projects panel (3)");
-    m.insert("config.ports_panel", "Ports panel (4)");
-    m.insert("config.sessions_panel", "Sessions panel (5)");
-    m.insert("config.mcp_panel", "MCP servers (6)");
+    m.insert("config.quota_panel", "Quota panel (2)");
+    m.insert("config.tokens_panel", "Tokens panel (3)");
+    m.insert("config.projects_panel", "Projects panel (4)");
+    m.insert("config.ports_panel", "Ports panel (5)");
+    m.insert("config.sessions_panel", "Sessions panel (6)");
+    m.insert("config.mcp_panel", "MCP servers (7)");
+    m.insert("config.gpu_panel", "GPU panel (8)");
 
     // Terminal size too small
     m.insert("term.too_small", "Terminal size too small:");
@@ -393,11 +407,13 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("view.timeline", "时间线");
     m.insert("view.file_audit", "文件审计");
     m.insert("view.context_panel", "上下文面板");
+    m.insert("view.quota_panel", "配额面板");
     m.insert("view.tokens_panel", "词元面板");
     m.insert("view.projects_panel", "项目面板");
     m.insert("view.ports_panel", "端口面板");
     m.insert("view.sessions_panel", "会话面板");
     m.insert("view.mcp_servers_panel", "MCP 服务器面板");
+    m.insert("view.gpu_panel", "GPU 面板");
     m.insert("view.mcp_session_hide", "隐藏 MCP 会话");
     m.insert("view.cycle_theme", "切换主题");
     m.insert("view.key_toggle", "按键切换  ·  Esc 关闭 ");
@@ -450,6 +466,16 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("mcp.default", "默认");
     m.insert("mcp.suppress_off", "隐藏: 关闭 (M)");
 
+    m.insert("gpu.no_gpu", "未检测到 NVIDIA GPU");
+
+    m.insert("quota.5h", "5小时");
+    m.insert("quota.7d", "7天");
+    m.insert("quota.no_data", "无数据");
+    m.insert("quota.opencode_setup", "opencode --setup");
+    m.insert("quota.total", "总计");
+    m.insert("quota.in", "还有");
+    m.insert("quota.go_dzen", "Go Dzen");
+
     // Config panel
     m.insert("config.title", " 配置 ");
     m.insert("config.theme", "主题");
@@ -458,11 +484,12 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("config.change", "Enter/空格 更改");
     m.insert("config.close", "Esc 关闭");
     m.insert("config.context_panel", "上下文面板 (1)");
-    m.insert("config.tokens_panel", "词元面板 (2)");
-    m.insert("config.projects_panel", "项目面板 (3)");
-    m.insert("config.ports_panel", "端口面板 (4)");
-    m.insert("config.sessions_panel", "会话面板 (5)");
-    m.insert("config.mcp_panel", "MCP 服务器 (6)");
+    m.insert("config.quota_panel", "配额面板 (2)");
+    m.insert("config.tokens_panel", "词元面板 (3)");
+    m.insert("config.projects_panel", "项目面板 (4)");
+    m.insert("config.ports_panel", "端口面板 (5)");
+    m.insert("config.sessions_panel", "会话面板 (6)");
+    m.insert("config.mcp_panel", "MCP 服务器 (7)");
 
     // Terminal size too small
     m.insert("term.too_small", "终端尺寸过小:");
