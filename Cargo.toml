@@ -1,6 +1,6 @@
 [package]
 name = "llmtop"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.88"
 description = "htop for local LLMs — universal TUI dashboard for monitoring Ollama, llama.cpp, vLLM, and any OpenAI-compatible inference server"
