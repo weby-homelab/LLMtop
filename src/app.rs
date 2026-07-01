@@ -504,6 +504,45 @@ impl App {
         self.status_msg = Some((msg, Instant::now()));
     }
 
+    pub fn check_alerts(&self) -> Vec<String> {
+        let mut alerts = Vec::new();
+
+        for s in &self.sessions {
+            if s.context_percent > 90.0 {
+                alerts.push(format!(
+                    "{}: context at {:.0}%",
+                    s.project_name, s.context_percent
+                ));
+            }
+        }
+
+        for rl in &self.rate_limits {
+            if rl.five_hour_pct.is_some_and(|p| p > 80.0) {
+                alerts.push(format!(
+                    "{}: 5h rate limit at {:.0}%",
+                    rl.source.to_uppercase(),
+                    rl.five_hour_pct.unwrap()
+                ));
+            }
+            if rl.seven_day_pct.is_some_and(|p| p > 80.0) {
+                alerts.push(format!(
+                    "{}: 7d rate limit at {:.0}%",
+                    rl.source.to_uppercase(),
+                    rl.seven_day_pct.unwrap()
+                ));
+            }
+        }
+
+        if !self.orphan_ports.is_empty() {
+            alerts.push(format!(
+                "{} orphan port(s) detected",
+                self.orphan_ports.len()
+            ));
+        }
+
+        alerts
+    }
+
     /// Full refresh used by the TUI: collect monitored data, then generate and
     /// retry session summaries. Equivalent to [`App::tick_no_summaries`] followed
     /// by [`App::drain_and_retry_summaries`].
@@ -561,6 +600,13 @@ impl App {
         }
 
         promote_waiting_to_rate_limited(&mut self.sessions, &self.rate_limits);
+
+        if self.status_msg.is_none() {
+            let alerts = self.check_alerts();
+            if let Some(first) = alerts.first() {
+                self.set_status(first.clone());
+            }
+        }
     }
 
     /// Drain completed summary results and spawn retries. Does NOT recollect

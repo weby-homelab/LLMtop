@@ -195,46 +195,53 @@ impl AgentCollector for AutoDiscoverCollector {
         port_pids.dedup_by_key(|pp| pp.0);
 
         let mut discovered = Vec::new();
+        let chunk_size = 10;
 
-        for (port, pid) in port_pids {
-            let addr = format!("127.0.0.1:{}", port);
+        for chunk_start in (0..port_pids.len()).step_by(chunk_size) {
+            let chunk_end = (chunk_start + chunk_size).min(port_pids.len());
+            let chunk = &port_pids[chunk_start..chunk_end];
 
-            // Probe /v1/models
-            let raw = match raw_http_get(&addr, "/v1/models") {
-                Some(r) => r,
-                None => continue,
-            };
+            let results: Vec<_> = std::thread::scope(|s| {
+                let handles: Vec<_> = chunk
+                    .iter()
+                    .map(|&(port, pid)| {
+                        s.spawn(move || {
+                            let addr = format!("127.0.0.1:{}", port);
+                            let raw = raw_http_get(&addr, "/v1/models")?;
+                            if !raw.starts_with("HTTP/1.") || !raw.contains("200") {
+                                return None;
+                            }
+                            let body = extract_body(&raw)?;
+                            let models = parse_model_ids(body);
+                            if models.is_empty() {
+                                return None;
+                            }
+                            let server_name = identify_server(&addr, body);
+                            Some((port, pid, server_name, models))
+                        })
+                    })
+                    .collect();
 
-            // Must be a successful HTTP response
-            if !raw.starts_with("HTTP/1.") || !raw.contains("200") {
-                continue;
-            }
-
-            let body = match extract_body(&raw) {
-                Some(b) => b,
-                None => continue,
-            };
-
-            let models = parse_model_ids(body);
-            if models.is_empty() {
-                continue;
-            }
-
-            let server_name = identify_server(&addr, body);
-
-            let rss_kb = shared
-                .process_info
-                .get(&pid)
-                .map(|p| p.rss_kb)
-                .unwrap_or(0);
-
-            discovered.push(DiscoveredServer {
-                port,
-                pid,
-                server_name,
-                models,
-                rss_kb,
+                handles
+                    .into_iter()
+                    .filter_map(|h| h.join().ok().flatten())
+                    .collect()
             });
+
+            for (port, pid, server_name, models) in results {
+                let rss_kb = shared
+                    .process_info
+                    .get(&pid)
+                    .map(|p| p.rss_kb)
+                    .unwrap_or(0);
+                discovered.push(DiscoveredServer {
+                    port,
+                    pid,
+                    server_name,
+                    models,
+                    rss_kb,
+                });
+            }
         }
 
         self.cached_servers = discovered;
