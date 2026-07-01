@@ -1,5 +1,6 @@
 use crate::collector::{read_rate_limits, McpServer, MultiCollector};
 use crate::collector::rate_limit::read_opencode_rate_limits;
+use crate::gpu::{GpuMetrics, GpuSampler};
 use crate::host_info::{AgentAggregate, HostMetrics, HostSampler};
 use crate::model::{AgentSession, OrphanPort, RateLimitInfo, SessionStatus};
 use crate::theme::Theme;
@@ -73,6 +74,7 @@ pub enum NarrowSection {
     Tokens,
     Ports,
     Mcp,
+    Gpu,
 }
 
 impl NarrowSection {
@@ -80,7 +82,7 @@ impl NarrowSection {
         match self {
             Self::Sessions | Self::Projects => NarrowTab::Work,
             Self::Context | Self::Quota | Self::Tokens => NarrowTab::Usage,
-            Self::Ports | Self::Mcp => NarrowTab::System,
+            Self::Ports | Self::Mcp | Self::Gpu => NarrowTab::System,
         }
     }
 }
@@ -122,6 +124,7 @@ pub struct App {
     pub show_ports: bool,
     pub show_sessions: bool,
     pub show_mcp: bool,
+    pub show_gpu: bool,
     pub narrow_tab: NarrowTab,
     pub active_narrow_section: Option<NarrowSection>,
     pub maximized_narrow_section: Option<NarrowSection>,
@@ -144,6 +147,8 @@ pub struct App {
     host_sampler: HostSampler,
     /// Latest host metrics snapshot (None until first valid sample).
     pub host_metrics: Option<HostMetrics>,
+    pub gpu_metrics: Vec<GpuMetrics>,
+    gpu_sampler: GpuSampler,
     /// Aggregate metrics across all sessions (recomputed each tick).
     pub agent_aggregate: AgentAggregate,
     /// Help overlay (`?`) visibility.
@@ -198,6 +203,7 @@ impl App {
             show_ports: panels.ports,
             show_sessions: panels.sessions,
             show_mcp: panels.mcp,
+            show_gpu: panels.gpu,
             narrow_tab: NarrowTab::Work,
             active_narrow_section: Some(NarrowSection::Sessions),
             maximized_narrow_section: None,
@@ -213,6 +219,8 @@ impl App {
             show_file_audit: false,
             host_sampler: HostSampler::new(),
             host_metrics: None,
+            gpu_metrics: Vec::new(),
+            gpu_sampler: GpuSampler::new(),
             agent_aggregate: AgentAggregate::default(),
             help_open: false,
             view_open: false,
@@ -242,6 +250,7 @@ impl App {
             5 => self.show_ports = !self.show_ports,
             6 => self.show_sessions = !self.show_sessions,
             7 => self.show_mcp = !self.show_mcp,
+            8 => self.show_gpu = !self.show_gpu,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -271,6 +280,7 @@ impl App {
             ports: self.show_ports,
             sessions: self.show_sessions,
             mcp: self.show_mcp,
+            gpu: self.show_gpu,
         };
         if let Err(e) = crate::config::save_panel_visibility(&panels) {
             self.set_status(format!("panels save failed: {}", e));
@@ -289,7 +299,7 @@ impl App {
     }
 
     pub fn config_item_count(&self) -> usize {
-        8 // theme + 7 panel toggles
+        9
     }
 
     pub fn config_select_next(&mut self) {
@@ -315,6 +325,7 @@ impl App {
             5 => self.show_ports = !self.show_ports,
             6 => self.show_sessions = !self.show_sessions,
             7 => self.show_mcp = !self.show_mcp,
+            8 => self.show_gpu = !self.show_gpu,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -325,7 +336,7 @@ impl App {
         match tab {
             NarrowTab::Work => self.show_sessions || self.show_projects,
             NarrowTab::Usage => self.show_context || self.show_quota || self.show_tokens,
-            NarrowTab::System => self.show_ports || self.show_mcp,
+            NarrowTab::System => self.show_ports || self.show_mcp || self.show_gpu,
         }
     }
 
@@ -391,6 +402,7 @@ impl App {
             NarrowSection::Tokens => self.show_tokens,
             NarrowSection::Ports => self.show_ports,
             NarrowSection::Mcp => self.show_mcp,
+            NarrowSection::Gpu => self.show_gpu,
         }
     }
 
@@ -402,7 +414,7 @@ impl App {
                 NarrowSection::Quota,
                 NarrowSection::Tokens,
             ],
-            NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp],
+            NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp, NarrowSection::Gpu],
         };
         sections
             .iter()
@@ -512,6 +524,7 @@ impl App {
         self.orphan_ports = self.collector.orphan_ports.clone();
         self.mcp_servers = self.collector.mcp_servers.clone();
         self.host_metrics = self.host_sampler.sample();
+        self.gpu_metrics = self.gpu_sampler.sample();
         self.agent_aggregate = AgentAggregate::from_sessions(&self.sessions);
         if self.selected >= self.sessions.len() && !self.sessions.is_empty() {
             self.selected = self.sessions.len() - 1;

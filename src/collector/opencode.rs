@@ -1,9 +1,9 @@
 use super::{process, context_window_for_model};
 use crate::model::{AgentSession, ChildProcess, SessionStatus, ChatMessage, ToolCall, ChatRole};
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 use std::process::Command;
 
 /// Maximum sessions to fetch from the DB per query.
@@ -13,16 +13,14 @@ const MAX_SESSIONS: u32 = 50;
 ///
 /// Discovery strategy:
 /// 1. `ps` to find running opencode processes (from shared process data)
-/// 2. Query SQLite DB at ~/.local/share/opencode/opencode.db via `sqlite3` CLI
+/// 2. Query SQLite DB at ~/.local/share/opencode/opencode.db via `rusqlite`
 /// 3. Match running PIDs to sessions by cwd
 ///
-/// Uses `sqlite3 -readonly -json` for safe concurrent reads (WAL mode).
+/// Uses rusqlite with `SQLITE_OPEN_READ_ONLY` for safe concurrent reads (WAL mode).
 /// DB rows are cached and only refreshed on `shared.slow_tick` (every ~10s)
 /// OR when the database file/WAL modification time changes, enabling instant updates.
 pub struct OpenCodeCollector {
     db_path: PathBuf,
-    /// Whether sqlite3 CLI is available (checked once).
-    sqlite3_available: Option<bool>,
     /// Cached DB rows from the last slow-tick or mtime-change query. Reused on fast ticks.
     cached_db_sessions: Vec<DbSession>,
     /// Cached DB subagent rows from the last slow-tick query.
@@ -35,9 +33,6 @@ pub struct OpenCodeCollector {
     last_db_mtime: Option<std::time::SystemTime>,
     /// Last modification time of the WAL file.
     last_wal_mtime: Option<std::time::SystemTime>,
-    /// Whether the "sqlite3 missing" warning has been emitted (once).
-    #[cfg(target_os = "windows")]
-    warned_sqlite3_missing: bool,
 }
 
 impl OpenCodeCollector {
@@ -50,25 +45,13 @@ impl OpenCodeCollector {
         let db_path = windows_db_path(db_path);
         Self {
             db_path,
-            sqlite3_available: None,
             cached_db_sessions: Vec::new(),
             cached_db_subagents: Vec::new(),
             cached_chat_messages: HashMap::new(),
             cached_tool_calls: HashMap::new(),
             last_db_mtime: None,
             last_wal_mtime: None,
-            #[cfg(target_os = "windows")]
-            warned_sqlite3_missing: false,
         }
-    }
-
-    fn check_sqlite3(&mut self) -> bool {
-        if let Some(available) = self.sqlite3_available {
-            return available;
-        }
-        let available = Command::new("sqlite3").arg("--version").output().is_ok();
-        self.sqlite3_available = Some(available);
-        available
     }
 
     fn collect_sessions(&mut self, shared: &super::SharedProcessData) -> Vec<AgentSession> {
@@ -91,28 +74,7 @@ impl OpenCodeCollector {
             self.cached_tool_calls.clear();
             return vec![];
         }
-        if !self.check_sqlite3() {
-            // The DB exists but we can't read it: on Windows sqlite3 is
-            // usually not preinstalled, so say why sessions are missing
-            // instead of failing silently.
-            #[cfg(target_os = "windows")]
-            if !self.warned_sqlite3_missing {
-                self.warned_sqlite3_missing = true;
-                eprintln!(
-                    "llmtop: OpenCode database found at {} but the `sqlite3` CLI is not on PATH; \
-                     OpenCode sessions will not appear. Install it (e.g. `winget install SQLite.SQLite`) \
-                     and restart llmtop.",
-                    self.db_path.display()
-                );
-            }
-            self.cached_db_sessions.clear();
-            self.cached_db_subagents.clear();
-            self.cached_chat_messages.clear();
-            self.cached_tool_calls.clear();
-            return vec![];
-        }
 
-        // Find running opencode PIDs and their commands for cwd matching
         let opencode_pids = Self::find_opencode_pids(&shared.process_info);
         let pid_commands: HashMap<u32, &str> = opencode_pids
             .iter()
@@ -415,25 +377,16 @@ impl OpenCodeCollector {
         None
     }
 
-    /// Run a single sqlite3 query and parse the JSON output.
-    fn run_query(&self, sql: &str) -> Option<Vec<Value>> {
-        let db = self.db_path.to_str()?;
-        let output = Command::new("sqlite3")
-            .args(["-readonly", "-json", db])
-            .arg(sql)
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.trim().is_empty() {
-            return Some(vec![]);
-        }
-        serde_json::from_str(stdout.trim()).ok()
+    fn open_readonly(&self) -> Option<rusqlite::Connection> {
+        rusqlite::Connection::open_with_flags(
+            &self.db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ).ok()
     }
 
     fn query_sessions(&self) -> Option<Vec<DbSession>> {
+        let conn = self.open_readonly()?;
+
         let session_sql = format!(
             r#"
 SELECT
@@ -483,65 +436,86 @@ LIMIT {};"#,
             MAX_SESSIONS
         );
 
-        // Two separate invocations to avoid fragile concatenated JSON parsing
-        let rows = self.run_query(&session_sql)?;
-        let model_rows = self.run_query(&model_sql).unwrap_or_default();
-
-        // Build model lookup by session id
         let mut model_map: HashMap<String, (String, String, String, Option<u64>, u64)> = HashMap::new();
-        for mr in &model_rows {
-            if let Some(id) = mr["id"].as_str() {
+        if let Ok(mut stmt) = conn.prepare(&model_sql) {
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<i64>>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            }).ok()?;
+            for (id, model, provider, last_role, last_completed, last_total_tokens) in rows.flatten() {
                 model_map.insert(
-                    id.to_string(),
+                    id.clone(),
                     (
-                        sanitize_db_field(mr["model"].as_str().unwrap_or(""), 256),
-                        sanitize_db_field(mr["provider"].as_str().unwrap_or(""), 256),
-                        sanitize_db_field(mr["last_role"].as_str().unwrap_or(""), 64),
-                        mr["last_completed"].as_u64(),
-                        mr["last_total_tokens"].as_u64().unwrap_or(0),
+                        sanitize_db_field(&model, 256),
+                        sanitize_db_field(&provider, 256),
+                        sanitize_db_field(&last_role, 64),
+                        last_completed.map(|v| v as u64),
+                        last_total_tokens as u64,
                     ),
                 );
             }
         }
 
         let mut sessions = Vec::new();
-        for row in rows {
-            let id = row["id"].as_str().unwrap_or("").to_string();
-            let (model, provider, last_role, last_completed, last_total_tokens) = model_map
-                .remove(&id)
-                .unwrap_or_else(|| ("".to_string(), "".to_string(), "".to_string(), None, 0));
+        if let Ok(mut stmt) = conn.prepare(&session_sql) {
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, i64>(7)?,
+                    row.get::<_, i64>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, i64>(10)?,
+                    row.get::<_, i64>(11)?,
+                ))
+            }).ok()?;
+            for (id, raw_title, directory, version, time_created, project_name,
+                       turn_count, total_input, total_output, total_cache_read, total_cache_write) in rows.flatten() {
+                let (model, provider, last_role, last_completed, last_total_tokens) = model_map
+                    .remove(&id)
+                    .unwrap_or_else(|| ("".to_string(), "".to_string(), "".to_string(), None, 0));
 
-            // Sanitize DB-sourced strings before they reach the TUI/JSON snapshot.
-            let title = sanitize_db_title(row["title"].as_str().unwrap_or(""));
-            let directory = sanitize_db_field(row["directory"].as_str().unwrap_or(""), 4096);
-            let version = sanitize_db_field(row["version"].as_str().unwrap_or(""), 64);
-            let project_name = sanitize_db_field(row["project_name"].as_str().unwrap_or(""), 256);
+                let title = sanitize_db_title(&raw_title);
+                let directory = sanitize_db_field(&directory, 4096);
+                let version = sanitize_db_field(&version, 64);
+                let project_name = sanitize_db_field(&project_name, 256);
 
-            sessions.push(DbSession {
-                id,
-                title,
-                directory,
-                version,
-                // time_created is in milliseconds since epoch
-                time_created: row["time_created"].as_u64().unwrap_or(0),
-                project_name,
-                turn_count: row["turn_count"].as_u64().unwrap_or(0) as u32,
-                total_input: row["total_input"].as_u64().unwrap_or(0),
-                total_output: row["total_output"].as_u64().unwrap_or(0),
-                total_cache_read: row["total_cache_read"].as_u64().unwrap_or(0),
-                total_cache_write: row["total_cache_write"].as_u64().unwrap_or(0),
-                model,
-                provider,
-                last_role,
-                last_completed,
-                last_total_tokens,
-            });
+                sessions.push(DbSession {
+                    id,
+                    title,
+                    directory,
+                    version,
+                    time_created: time_created as u64,
+                    project_name,
+                    turn_count: turn_count as u32,
+                    total_input: total_input as u64,
+                    total_output: total_output as u64,
+                    total_cache_read: total_cache_read as u64,
+                    total_cache_write: total_cache_write as u64,
+                    model,
+                    provider,
+                    last_role,
+                    last_completed,
+                    last_total_tokens,
+                });
+            }
         }
 
         Some(sessions)
     }
 
     fn query_subagents(&self) -> Option<Vec<DbSubAgent>> {
+        let conn = self.open_readonly()?;
         let sql = format!(
             r#"
 SELECT 
@@ -553,19 +527,25 @@ WHERE parent_id IS NOT NULL AND parent_id != ''
 LIMIT {};"#,
             MAX_SESSIONS
         );
-        let rows = self.run_query(&sql)?;
         let mut subagents = Vec::new();
-        for row in rows {
-            let parent_id = row["parent_id"].as_str().unwrap_or("").to_string();
-            let title = sanitize_db_title(row["title"].as_str().unwrap_or(""));
-            let tokens = row["tokens"].as_u64().unwrap_or(0);
-            let time_updated = row["time_updated"].as_u64().unwrap_or(0);
-            subagents.push(DbSubAgent {
-                parent_id,
-                title,
-                tokens,
-                time_updated,
-            });
+        if let Ok(mut stmt) = conn.prepare(&sql) {
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            }).ok()?;
+            for (parent_id, title, tokens, time_updated) in rows.flatten() {
+                let title = sanitize_db_title(&title);
+                subagents.push(DbSubAgent {
+                    parent_id,
+                    title,
+                    tokens: tokens as u64,
+                    time_updated: time_updated as u64,
+                });
+            }
         }
         Some(subagents)
     }
@@ -576,6 +556,7 @@ LIMIT {};"#,
         if session_ids.is_empty() {
             return Some(HashMap::new());
         }
+        let conn = self.open_readonly()?;
         let formatted_ids: Vec<String> = session_ids.iter().map(|id| format!("'{}'", id)).collect();
         let sql = format!(
             r#"
@@ -590,64 +571,68 @@ ORDER BY p.time_created ASC;"#,
             formatted_ids.join(",")
         );
 
-        let rows = self.run_query(&sql)?;
         let mut map: HashMap<String, (Vec<ChatMessage>, Vec<ToolCall>)> = HashMap::new();
         for id in session_ids {
             map.insert(id.clone(), (Vec::new(), Vec::new()));
         }
 
-        for row in rows {
-            let session_id = row["session_id"].as_str().unwrap_or("").to_string();
-            let role_str = row["role"].as_str().unwrap_or("");
-            let part_data_str = row["part_data"].as_str().unwrap_or("");
-
-            if let Some((chat, tools)) = map.get_mut(&session_id) {
-                if let Ok(obj) = serde_json::from_str::<serde_json::Value>(part_data_str) {
-                    let part_type = obj["type"].as_str().unwrap_or("");
-                    if part_type == "text" || part_type == "reasoning" {
-                        if let Some(text) = obj["text"].as_str() {
-                            if !text.trim().is_empty() {
-                                let role = if role_str == "user" {
-                                    ChatRole::User
-                                } else {
-                                    ChatRole::Assistant
-                                };
-                                let redacted_text = super::redact_secrets(&super::sanitize_terminal_text(text));
-                                chat.push(ChatMessage {
-                                    role,
-                                    text: redacted_text,
-                                });
-                            }
-                        }
-                    } else if part_type == "tool" {
-                        let name = obj["tool"].as_str().unwrap_or("").to_string();
-                        if !name.is_empty() {
-                            let mut arg = String::new();
-                            if let Some(input) = obj["state"]["input"].as_object() {
-                                if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
-                                    arg = cmd.to_string();
-                                } else if let Some(path) = input.get("filePath").and_then(|v| v.as_str()) {
-                                    arg = path.to_string();
-                                } else if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
-                                    arg = path.to_string();
-                                } else if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
-                                    arg = pattern.to_string();
-                                } else if let Some(desc) = input.get("description").and_then(|v| v.as_str()) {
-                                    arg = desc.to_string();
-                                } else if !input.is_empty() {
-                                    if let Some(first_val) = input.values().next().and_then(|v| v.as_str()) {
-                                        arg = first_val.to_string();
-                                    }
+        if let Ok(mut stmt) = conn.prepare(&sql) {
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            }).ok()?;
+            for (session_id, role_str, part_data_str) in rows.flatten() {
+                if let Some((chat, tools)) = map.get_mut(&session_id) {
+                    if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&part_data_str) {
+                        let part_type = obj["type"].as_str().unwrap_or("");
+                        if part_type == "text" || part_type == "reasoning" {
+                            if let Some(text) = obj["text"].as_str() {
+                                if !text.trim().is_empty() {
+                                    let role = if role_str == "user" {
+                                        ChatRole::User
+                                    } else {
+                                        ChatRole::Assistant
+                                    };
+                                    let redacted_text = super::redact_secrets(&super::sanitize_terminal_text(text));
+                                    chat.push(ChatMessage {
+                                        role,
+                                        text: redacted_text,
+                                    });
                                 }
                             }
-                            let start = obj["state"]["time"]["start"].as_u64().unwrap_or(0);
-                            let end = obj["state"]["time"]["end"].as_u64().unwrap_or(0);
-                            let duration_ms = end.saturating_sub(start);
-                            tools.push(ToolCall {
-                                name,
-                                arg,
-                                duration_ms,
-                            });
+                        } else if part_type == "tool" {
+                            let name = obj["tool"].as_str().unwrap_or("").to_string();
+                            if !name.is_empty() {
+                                let mut arg = String::new();
+                                if let Some(input) = obj["state"]["input"].as_object() {
+                                    if let Some(cmd) = input.get("command").and_then(|v| v.as_str()) {
+                                        arg = cmd.to_string();
+                                    } else if let Some(path) = input.get("filePath").and_then(|v| v.as_str()) {
+                                        arg = path.to_string();
+                                    } else if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+                                        arg = path.to_string();
+                                    } else if let Some(pattern) = input.get("pattern").and_then(|v| v.as_str()) {
+                                        arg = pattern.to_string();
+                                    } else if let Some(desc) = input.get("description").and_then(|v| v.as_str()) {
+                                        arg = desc.to_string();
+                                    } else if !input.is_empty() {
+                                        if let Some(first_val) = input.values().next().and_then(|v| v.as_str()) {
+                                            arg = first_val.to_string();
+                                        }
+                                    }
+                                }
+                                let start = obj["state"]["time"]["start"].as_u64().unwrap_or(0);
+                                let end = obj["state"]["time"]["end"].as_u64().unwrap_or(0);
+                                let duration_ms = end.saturating_sub(start);
+                                tools.push(ToolCall {
+                                    name,
+                                    arg,
+                                    duration_ms,
+                                });
+                            }
                         }
                     }
                 }

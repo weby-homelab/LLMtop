@@ -1,6 +1,7 @@
 mod config;
 mod context;
 mod footer;
+mod gpu;
 mod header;
 mod help;
 mod mcp;
@@ -397,6 +398,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             NarrowSection::Projects => projects::draw_projects_panel(f, app, area, theme),
             NarrowSection::Ports => ports::draw_ports_panel(f, app, area, theme),
             NarrowSection::Mcp => mcp::draw_mcp_panel(f, app, area, theme),
+            NarrowSection::Gpu => gpu::draw_gpu_panel(f, app, area, theme),
             NarrowSection::Sessions | NarrowSection::Context => {}
         }
     }
@@ -429,6 +431,9 @@ fn desktop_layout(app: &App, area: Rect) -> DesktopLayout {
     }
     if app.show_mcp {
         mid_sections.push(NarrowSection::Mcp);
+    }
+    if app.show_gpu {
+        mid_sections.push(NarrowSection::Gpu);
     }
 
     let any_mid = !mid_sections.is_empty();
@@ -669,6 +674,7 @@ fn draw_narrow_section(
         NarrowSection::Tokens => tokens::draw_tokens_panel_active(f, app, area, theme, active),
         NarrowSection::Ports => ports::draw_ports_panel_active(f, app, area, theme, active),
         NarrowSection::Mcp => mcp::draw_mcp_panel_active(f, app, area, theme, active),
+        NarrowSection::Gpu => gpu::draw_gpu_panel_active(f, app, area, theme, active),
     }
 }
 
@@ -1195,7 +1201,7 @@ mod tests {
             x: 0,
             y: 0,
             width: 69,
-            height: 27,
+            height: 39,
         };
         let body = narrow_chunks(area)[1];
 

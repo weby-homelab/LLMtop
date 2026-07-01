@@ -75,6 +75,10 @@ pub(crate) fn draw_config_overlay(f: &mut Frame, app: &App, theme: &Theme) {
             t("config.mcp_panel"),
             toggle_str(&on_str, &off_str, app.show_mcp),
         ),
+        (
+            t("config.gpu_panel"),
+            toggle_str(&on_str, &off_str, app.show_gpu),
+        ),
     ];
 
     let mut lines = Vec::new();

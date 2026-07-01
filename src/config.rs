@@ -9,6 +9,7 @@ pub struct PanelVisibility {
     pub ports: bool,
     pub sessions: bool,
     pub mcp: bool,
+    pub gpu: bool,
 }
 
 impl Default for PanelVisibility {
@@ -21,6 +22,7 @@ impl Default for PanelVisibility {
             ports: true,
             sessions: true,
             mcp: true,
+            gpu: true,
         }
     }
 }
@@ -105,6 +107,7 @@ fn parse_config_body(content: &str) -> AppConfig {
                 "show_ports" => config.panels.ports = parse_bool(val).unwrap_or(true),
                 "show_sessions" => config.panels.sessions = parse_bool(val).unwrap_or(true),
                 "show_mcp" => config.panels.mcp = parse_bool(val).unwrap_or(true),
+                "show_gpu" => config.panels.gpu = parse_bool(val).unwrap_or(true),
                 _ => {}
             }
         }
@@ -168,6 +171,7 @@ pub fn save_panel_visibility(panels: &PanelVisibility) -> Result<(), String> {
         ("show_ports", panels.ports.to_string()),
         ("show_sessions", panels.sessions.to_string()),
         ("show_mcp", panels.mcp.to_string()),
+        ("show_gpu", panels.gpu.to_string()),
     ])
 }
 

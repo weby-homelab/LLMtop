@@ -127,7 +127,7 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("help.toggle_file_audit", "toggle file audit");
     m.insert(
         "help.toggle_panels",
-        "toggle panels (context/quota/tokens/projects/ports/sessions/mcp)",
+        "toggle panels (context/quota/tokens/projects/ports/sessions/mcp/gpu)",
     );
     m.insert(
         "help.mcp_suppress",
@@ -165,6 +165,7 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("view.ports_panel", "ports panel");
     m.insert("view.sessions_panel", "sessions panel");
     m.insert("view.mcp_servers_panel", "mcp servers panel");
+    m.insert("view.gpu_panel", "GPU panel");
     m.insert("view.mcp_session_hide", "mcp session hide");
     m.insert("view.cycle_theme", "cycle theme");
     m.insert("view.key_toggle", "key = toggle  ·  Esc = close ");
@@ -217,6 +218,8 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("mcp.default", "default");
     m.insert("mcp.suppress_off", "suppress: off (M)");
 
+    m.insert("gpu.no_gpu", "no NVIDIA GPU detected");
+
     m.insert("quota.5h", "5h");
     m.insert("quota.7d", "7d");
     m.insert("quota.no_data", "no data");
@@ -239,6 +242,7 @@ static LOCALE_EN: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("config.ports_panel", "Ports panel (5)");
     m.insert("config.sessions_panel", "Sessions panel (6)");
     m.insert("config.mcp_panel", "MCP servers (7)");
+    m.insert("config.gpu_panel", "GPU panel (8)");
 
     // Terminal size too small
     m.insert("term.too_small", "Terminal size too small:");
@@ -409,6 +413,7 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("view.ports_panel", "端口面板");
     m.insert("view.sessions_panel", "会话面板");
     m.insert("view.mcp_servers_panel", "MCP 服务器面板");
+    m.insert("view.gpu_panel", "GPU 面板");
     m.insert("view.mcp_session_hide", "隐藏 MCP 会话");
     m.insert("view.cycle_theme", "切换主题");
     m.insert("view.key_toggle", "按键切换  ·  Esc 关闭 ");
@@ -460,6 +465,8 @@ static LOCALE_ZH: LazyLock<std::collections::HashMap<&str, &str>> = LazyLock::ne
     m.insert("mcp.no_servers", "无 MCP 服务器");
     m.insert("mcp.default", "默认");
     m.insert("mcp.suppress_off", "隐藏: 关闭 (M)");
+
+    m.insert("gpu.no_gpu", "未检测到 NVIDIA GPU");
 
     m.insert("quota.5h", "5小时");
     m.insert("quota.7d", "7天");

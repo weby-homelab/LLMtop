@@ -12,6 +12,7 @@
 
 use crate::app::App;
 use crate::collector::mcp::ACTIVE_MTIME_SECS;
+use crate::gpu::GpuMetrics;
 use crate::host_info::{AgentAggregate, HostMetrics};
 use crate::model::{
     ChatRole, ChildProcess, OrphanPort, RateLimitInfo, SessionStatus, MAX_CHAT_MESSAGES,
@@ -48,6 +49,7 @@ pub struct Snapshot {
     pub orphan_ports: Vec<OrphanPort>,
     /// Detected MCP servers (currently `codex mcp-server`).
     pub mcp_servers: Vec<McpServerView>,
+    pub gpu: Vec<GpuMetrics>,
 }
 
 /// One chat line from the transcript tail (detail view only).
@@ -283,6 +285,7 @@ impl App {
             rate_limits: self.rate_limits.clone(),
             orphan_ports: self.orphan_ports.clone(),
             mcp_servers,
+            gpu: self.gpu_metrics.clone(),
         }
     }
 }
