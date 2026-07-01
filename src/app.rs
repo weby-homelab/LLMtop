@@ -1,4 +1,5 @@
 use crate::collector::{read_rate_limits, McpServer, MultiCollector};
+use crate::collector::rate_limit::read_opencode_rate_limits;
 use crate::host_info::{AgentAggregate, HostMetrics, HostSampler};
 use crate::model::{AgentSession, OrphanPort, RateLimitInfo, SessionStatus};
 use crate::theme::Theme;
@@ -68,6 +69,7 @@ pub enum NarrowSection {
     Sessions,
     Projects,
     Context,
+    Quota,
     Tokens,
     Ports,
     Mcp,
@@ -77,7 +79,7 @@ impl NarrowSection {
     pub fn tab(self) -> NarrowTab {
         match self {
             Self::Sessions | Self::Projects => NarrowTab::Work,
-            Self::Context | Self::Tokens => NarrowTab::Usage,
+            Self::Context | Self::Quota | Self::Tokens => NarrowTab::Usage,
             Self::Ports | Self::Mcp => NarrowTab::System,
         }
     }
@@ -114,6 +116,7 @@ pub struct App {
     kill_confirm: Option<(usize, Instant)>,
     pub theme: Theme,
     pub show_context: bool,
+    pub show_quota: bool,
     pub show_tokens: bool,
     pub show_projects: bool,
     pub show_ports: bool,
@@ -189,6 +192,7 @@ impl App {
             kill_confirm: None,
             theme,
             show_context: panels.context,
+            show_quota: panels.quota,
             show_tokens: panels.tokens,
             show_projects: panels.projects,
             show_ports: panels.ports,
@@ -232,11 +236,12 @@ impl App {
     pub fn toggle_panel(&mut self, panel: u8) {
         match panel {
             1 => self.show_context = !self.show_context,
-            2 => self.show_tokens = !self.show_tokens,
-            3 => self.show_projects = !self.show_projects,
-            4 => self.show_ports = !self.show_ports,
-            5 => self.show_sessions = !self.show_sessions,
-            6 => self.show_mcp = !self.show_mcp,
+            2 => self.show_quota = !self.show_quota,
+            3 => self.show_tokens = !self.show_tokens,
+            4 => self.show_projects = !self.show_projects,
+            5 => self.show_ports = !self.show_ports,
+            6 => self.show_sessions = !self.show_sessions,
+            7 => self.show_mcp = !self.show_mcp,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -260,6 +265,7 @@ impl App {
     fn persist_panel_visibility(&mut self) {
         let panels = crate::config::PanelVisibility {
             context: self.show_context,
+            quota: self.show_quota,
             tokens: self.show_tokens,
             projects: self.show_projects,
             ports: self.show_ports,
@@ -303,11 +309,12 @@ impl App {
                 return;
             }
             1 => self.show_context = !self.show_context,
-            2 => self.show_tokens = !self.show_tokens,
-            3 => self.show_projects = !self.show_projects,
-            4 => self.show_ports = !self.show_ports,
-            5 => self.show_sessions = !self.show_sessions,
-            6 => self.show_mcp = !self.show_mcp,
+            2 => self.show_quota = !self.show_quota,
+            3 => self.show_tokens = !self.show_tokens,
+            4 => self.show_projects = !self.show_projects,
+            5 => self.show_ports = !self.show_ports,
+            6 => self.show_sessions = !self.show_sessions,
+            7 => self.show_mcp = !self.show_mcp,
             _ => return,
         }
         self.persist_panel_visibility();
@@ -317,7 +324,7 @@ impl App {
     pub fn narrow_tab_visible(&self, tab: NarrowTab) -> bool {
         match tab {
             NarrowTab::Work => self.show_sessions || self.show_projects,
-            NarrowTab::Usage => self.show_context || self.show_tokens,
+            NarrowTab::Usage => self.show_context || self.show_quota || self.show_tokens,
             NarrowTab::System => self.show_ports || self.show_mcp,
         }
     }
@@ -380,6 +387,7 @@ impl App {
             NarrowSection::Sessions => self.show_sessions,
             NarrowSection::Projects => self.show_projects,
             NarrowSection::Context => self.show_context,
+            NarrowSection::Quota => self.show_quota,
             NarrowSection::Tokens => self.show_tokens,
             NarrowSection::Ports => self.show_ports,
             NarrowSection::Mcp => self.show_mcp,
@@ -391,6 +399,7 @@ impl App {
             NarrowTab::Work => &[NarrowSection::Sessions, NarrowSection::Projects],
             NarrowTab::Usage => &[
                 NarrowSection::Context,
+                NarrowSection::Quota,
                 NarrowSection::Tokens,
             ],
             NarrowTab::System => &[NarrowSection::Ports, NarrowSection::Mcp],
@@ -532,8 +541,8 @@ impl App {
             self.rate_limit_counter = 0;
             let extra_dirs = self.collector.all_config_dirs();
             self.rate_limits = read_rate_limits(&extra_dirs);
-            // Merge live rate limits from agent collectors (e.g. Codex JSONL parsing)
             self.rate_limits.extend(self.collector.agent_rate_limits());
+            self.rate_limits.extend(read_opencode_rate_limits());
         } else {
             self.rate_limit_counter += 1;
         }
@@ -727,8 +736,18 @@ impl App {
                     return;
                 }
                 let _ = std::process::Command::new("kill")
-                    .args(["-9", &pid.to_string()])
+                    .args(["-15", &pid.to_string()])
                     .output();
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                if std::process::Command::new("kill")
+                    .args(["-0", &pid.to_string()])
+                    .status()
+                    .is_ok_and(|s| s.success())
+                {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid.to_string()])
+                        .output();
+                }
                 self.tick();
                 return;
             }
@@ -955,7 +974,16 @@ fn load_summary_cache() -> HashMap<String, String> {
 fn save_summary_cache(summaries: &HashMap<String, String>) {
     let path = cache_path();
     let _ = std::fs::create_dir_all(cache_dir());
-    if let Ok(json) = serde_json::to_string(summaries) {
+    let mut bounded = summaries.clone();
+    const MAX_CACHED_SUMMARIES: usize = 500;
+    while bounded.len() > MAX_CACHED_SUMMARIES {
+        if let Some(oldest_key) = bounded.keys().next().cloned() {
+            bounded.remove(&oldest_key);
+        } else {
+            break;
+        }
+    }
+    if let Ok(json) = serde_json::to_string(&bounded) {
         let tmp = path.with_extension("tmp");
         if std::fs::write(&tmp, &json).is_ok() {
             let _ = std::fs::rename(&tmp, &path);

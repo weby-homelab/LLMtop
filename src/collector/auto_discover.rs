@@ -274,7 +274,7 @@ impl AutoDiscoverCollector {
                 started_at: now_ms,
                 status,
                 model: model_str,
-                effort: format!(":{}", server.port),
+                effort: String::new(),
                 context_percent: 0.0,
                 total_input_tokens: 0,
                 total_output_tokens: 0,

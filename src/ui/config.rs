@@ -52,6 +52,10 @@ pub(crate) fn draw_config_overlay(f: &mut Frame, app: &App, theme: &Theme) {
             toggle_str(&on_str, &off_str, app.show_context),
         ),
         (
+            t("config.quota_panel"),
+            toggle_str(&on_str, &off_str, app.show_quota),
+        ),
+        (
             t("config.tokens_panel"),
             toggle_str(&on_str, &off_str, app.show_tokens),
         ),

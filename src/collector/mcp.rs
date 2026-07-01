@@ -2,10 +2,8 @@ use super::process::{self, ProcInfo};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-use std::process::{Command, Stdio};
-#[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-use std::time::Instant;
-use std::time::{Duration, SystemTime};
+use std::process::Command;
+use std::time::SystemTime;
 
 /// Active-thread mtime threshold: a rollout written within the last 30 minutes
 /// ACTIVE_MTIME_SECS counts as "active". File-descriptor presence alone
@@ -270,92 +268,6 @@ pub(crate) fn map_pid_to_rollouts(pids: &[u32]) -> HashMap<u32, Vec<PathBuf>> {
     }
 
     map
-}
-
-#[allow(dead_code)]
-pub(crate) fn map_pid_to_rollouts_with_timeout_and_pid_slot(
-    pids: &[u32],
-    timeout: Duration,
-    child_pid_slot: Option<std::sync::Arc<std::sync::atomic::AtomicU32>>,
-) -> Option<HashMap<u32, Vec<PathBuf>>> {
-    if pids.is_empty() {
-        return Some(HashMap::new());
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    {
-        let _ = (timeout, child_pid_slot);
-        Some(map_pid_to_rollouts(pids))
-    }
-
-    #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-    {
-        let pid_args: Vec<String> = pids.iter().map(|p| format!("-p{}", p)).collect();
-        let mut args = vec!["-F", "pn"];
-        for pa in &pid_args {
-            args.push(pa);
-        }
-
-        let output_file = tempfile::NamedTempFile::new().ok()?;
-        let output_for_child = output_file.reopen().ok()?;
-        let mut child = match Command::new("lsof")
-            .args(&args)
-            .stdout(Stdio::from(output_for_child))
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(_) => return None,
-        };
-        let child_pid = child.id();
-        if let Some(slot) = &child_pid_slot {
-            slot.store(child_pid, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        let started = Instant::now();
-        loop {
-            match child.try_wait() {
-                Ok(Some(_)) => {
-                    if let Some(slot) = &child_pid_slot {
-                        slot.store(0, std::sync::atomic::Ordering::SeqCst);
-                    }
-                    let stdout = std::fs::read_to_string(output_file.path()).ok();
-                    return stdout.map(|s| parse_lsof_rollout_output(&s));
-                }
-                Ok(None) if started.elapsed() >= timeout => {
-                    if let Some(slot) = &child_pid_slot {
-                        slot.store(0, std::sync::atomic::Ordering::SeqCst);
-                    }
-                    let _ = Command::new("kill")
-                        .args(["-9", &child_pid.to_string()])
-                        .status();
-                    let _ = child.wait();
-                    return None;
-                }
-                Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-                Err(_) => {
-                    if let Some(slot) = &child_pid_slot {
-                        slot.store(0, std::sync::atomic::Ordering::SeqCst);
-                    }
-                    return None;
-                }
-            }
-        }
-    }
-}
-
-#[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
-fn kill_pid(pid: u32) {
-    if pid != 0 {
-        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-fn kill_pid(_pid: u32) {}
-
-pub(crate) fn kill_rollout_scan_child(pid: u32) {
-    kill_pid(pid);
 }
 
 #[cfg(any(

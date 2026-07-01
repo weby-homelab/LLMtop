@@ -1,5 +1,9 @@
 # LLMtop
 
+[![CI](https://github.com/weby-homelab/LLMtop/actions/workflows/ci.yml/badge.svg)](https://github.com/weby-homelab/LLMtop/actions/workflows/ci.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org/)
+
 **Like [btop](https://github.com/aristocratos/btop), but for your local LLMs, runners, and AI coding agents.**
 
 See every active local LLM session, model usage, context window, rate limits, child processes, open ports, and more at a glance. Supports Ollama, llama.cpp, vLLM, OpenCode, Odysseus, and any OpenAI-compatible server (LM Studio, LiteLLM, Open WebUI, KoboldCpp, TabbyAPI, etc.).

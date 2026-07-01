@@ -385,16 +385,7 @@ fn handle_mouse_event(app: &mut App, mouse: MouseEvent, area: Rect) {
 /// overrides from a string for safe terminal output. Defeats CVE-2021-42574
 /// (Trojan Source) style attacks via RTLO/LRO/PDF/isolate characters.
 fn sanitize_output(s: &str) -> String {
-    s.chars()
-        .filter(|c| {
-            !c.is_control()
-                && !matches!(*c,
-                '\u{202A}'..='\u{202E}'
-                | '\u{2066}'..='\u{2069}'
-                | '\u{200E}'
-                | '\u{200F}')
-        })
-        .collect()
+    crate::collector::sanitize_terminal_text(s)
 }
 
 fn print_snapshot(app: &App) {

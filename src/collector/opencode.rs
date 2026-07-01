@@ -839,13 +839,7 @@ fn sanitize_db_field(raw: &str, max_bytes: usize) -> String {
 
 /// Truncate a string at a char boundary to avoid panics on multi-byte UTF-8.
 fn truncate_field(s: &mut String, max_bytes: usize) {
-    if s.len() > max_bytes {
-        let mut end = max_bytes;
-        while end > 0 && !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        s.truncate(end);
-    }
+    super::truncate_at_char_boundary(s, max_bytes);
 }
 
 /// Compare a process cwd with a DB session directory.

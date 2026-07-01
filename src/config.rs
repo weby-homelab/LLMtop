@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Clone, Copy)]
 pub struct PanelVisibility {
     pub context: bool,
+    pub quota: bool,
     pub tokens: bool,
     pub projects: bool,
     pub ports: bool,
@@ -14,6 +15,7 @@ impl Default for PanelVisibility {
     fn default() -> Self {
         Self {
             context: true,
+            quota: true,
             tokens: true,
             projects: true,
             ports: true,
@@ -97,6 +99,7 @@ fn parse_config_body(content: &str) -> AppConfig {
                 "theme" => config.theme = val.to_string(),
                 "language" => config.language = val.to_string(),
                 "show_context" => config.panels.context = parse_bool(val).unwrap_or(true),
+                "show_quota" => config.panels.quota = parse_bool(val).unwrap_or(true),
                 "show_tokens" => config.panels.tokens = parse_bool(val).unwrap_or(true),
                 "show_projects" => config.panels.projects = parse_bool(val).unwrap_or(true),
                 "show_ports" => config.panels.ports = parse_bool(val).unwrap_or(true),
@@ -159,6 +162,7 @@ pub fn save_theme(name: &str) -> Result<(), String> {
 pub fn save_panel_visibility(panels: &PanelVisibility) -> Result<(), String> {
     write_with_updates(&[
         ("show_context", panels.context.to_string()),
+        ("show_quota", panels.quota.to_string()),
         ("show_tokens", panels.tokens.to_string()),
         ("show_projects", panels.projects.to_string()),
         ("show_ports", panels.ports.to_string()),
@@ -181,7 +185,9 @@ fn write_with_updates(updates: &[(&str, String)]) -> Result<(), String> {
         Err(e) => return Err(e.to_string()),
     };
     let new_content = rewrite_kv_lines(&content, updates);
-    std::fs::write(&path, new_content).map_err(|e| e.to_string())
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, &new_content).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 /// Rewrite (or append) the listed `key = value` lines in a config body.
